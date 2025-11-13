@@ -1,9 +1,13 @@
 # .github/workflows/build-and-publish.yml
 name: Build and Publish GCC release
 on:
-  push:
-    tags:
-      - 'v*'   # publish when you push a tag like "v1.0.0"
+  workflow_dispatch:
+    inputs:
+      pragma_branch:
+        description: 'Which branch of Pragma to use'
+        required: true
+        default: 'develop'
+        type: string
 
 permissions:
   contents: write   # needed to create releases / upload assets
@@ -36,8 +40,8 @@ jobs:
           mkdir -p ../gcc-15-build
           cd ../gcc-15-build
           ../gcc-15-source/configure --prefix="$STAGE_DIR" --disable-multilib --enable-languages=c,c++
-          make -j$(nproc)
-          make install   # installs into $STAGE_DIR
+          #make -j$(nproc)
+          #make install   # installs into $STAGE_DIR
 
       - name: Pack staging dir
         env:
@@ -47,22 +51,45 @@ jobs:
           # Create tarball that contains a top-level folder GCC-15 (so extract location is clean)
           tar -czf gcc-15-${{ github.ref_name }}.tar.gz -C "$(dirname "$STAGE_DIR")" "$(basename "$STAGE_DIR")"
 
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: GCC 15 - ${{ github.ref_name }}
-          body: "Built GCC 15 binaries"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release Archive
+        shell: bash
+        run: |
+          curDir="$PWD"
+          mv "/" "$curDir/gcc-15-${{ github.ref_name }}.tar.gz"
 
-      - name: Upload tarball to release
-        uses: actions/upload-release-asset@v1
+      - name: Generate nightly tag description
+        shell: bash
+        run:   |
+          printf "Pre-built third-party libraries for Pragma." > tag_text.txt
+
+      - name: Compute build‐tag as today’s date
+        id: get_date
+        shell: bash
+        run: |
+          echo "date=$(TZ='Europe/Berlin' date +%F)" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v4
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ runner.temp }}/gcc-15-${{ github.ref_name }}.tar.gz
-          asset_name: gcc-15-${{ github.ref_name }}.tar.gz
-          asset_content_type: application/gzip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          path: "pragma-deps-lib"
+          
+      - name: Create Tag
+        uses: Silverlan/common_actions/create_tag@main
+        with:
+          tag_name: "${{ steps.get_date.outputs.date }}"
+          path: "pragma-deps-lib"
+
+      - name: Update nightly tag description
+        uses: softprops/action-gh-release@v0.1.15
+        with:
+          body_path: tag_text.txt
+          tag_name: "${{ steps.get_date.outputs.date }}"
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+
+      - name: Update nightly release
+        uses: pyTooling/Actions/releaser/composite@v4.2.2
+        with:
+          tag: "${{ steps.get_date.outputs.date }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: "gcc-15-${{ github.ref_name }}.tar.gz"
