@@ -55,7 +55,7 @@ jobs:
         shell: bash
         run: |
           curDir="$PWD"
-          mv "/" "$curDir/gcc-15-${{ github.ref_name }}.tar.gz"
+          mv "$curDir/gcc-15-${{ github.ref_name }}.tar.gz" "$curDir/"
 
       - name: Generate nightly tag description
         shell: bash
