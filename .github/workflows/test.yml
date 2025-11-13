@@ -40,8 +40,8 @@ jobs:
           mkdir -p ../gcc-15-build
           cd ../gcc-15-build
           ../gcc-15-source/configure --prefix="$STAGE_DIR" --disable-multilib --enable-languages=c,c++
-          #make -j$(nproc)
-          #make install   # installs into $STAGE_DIR
+          make -j$(nproc)
+          make install   # installs into $STAGE_DIR
 
       - name: Pack staging dir
         env:
